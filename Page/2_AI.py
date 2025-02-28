@@ -1,5 +1,6 @@
 import streamlit as st
 from openai import OpenAI
+from google import genai
 
 # Show title and description.
 st.title("TuFuturo AI")
@@ -11,12 +12,13 @@ st.write(
 # Alternatively, you can store the API key in `./.streamlit/secrets.toml` and access it
 # via `st.secrets`, see https://docs.streamlit.io/develop/concepts/connections/secrets-management
 gemini_api_key = st.text_input("Gemini API Key", type="password")
+
 if not gemini_api_key:
-    st.info("Please add your OpenAI API key to continue.", icon="🗝️")
+    st.info("Please add your Gemini API key to continue.", icon="🗝️")
 else:
 
     # Create an gemini client.
-    client = OpenAI(api_key=gemini_api_key)
+    client = genai.client(api_key=gemini_api_key)
 
     # Create a session state variable to store the chat messages. This ensures that the
     # messages persist across reruns.
