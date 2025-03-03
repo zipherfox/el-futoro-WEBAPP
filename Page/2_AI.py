@@ -1,9 +1,10 @@
 import streamlit as st
 import google.generativeai as genai
+import re  # Import the regular expression library
 
 # --- Configuration ---
 
-st.title("🎓 Major and Career Path Navigator")  # More engaging title
+st.title("🎓 Major and Career Path Navigator")
 st.write(
     "This AI-powered tool helps you discover potential majors and career paths "
     "based on your interests, skills, and preferences. Powered by Google's Gemini. "
@@ -27,11 +28,45 @@ def get_api_key():
 google_api_key = get_api_key()
 genai.configure(api_key=google_api_key)
 
-# --- Student Information Input (using your friend's questions) ---
+# --- Input Validation Function ---
+
+def is_gibberish(text, min_words=3, gibberish_threshold=0.6):
+    """
+    Checks if the input text is likely gibberish.
+
+    Args:
+        text: The input text string.
+        min_words: Minimum number of words expected.
+        gibberish_threshold:  The proportion of "words" that need to be
+            non-alphanumeric to be considered gibberish.
+
+    Returns:
+        True if the text is likely gibberish, False otherwise.
+    """
+    text = text.strip()
+    if not text:  # Empty string is considered gibberish
+        return True
+
+    words = text.split()
+    if len(words) < min_words:  # Check for minimum word count
+        return True
+
+    non_alphanumeric_count = 0
+    for word in words:
+        # Remove punctuation for a more accurate check
+        word = re.sub(r'[^\w\s]', '', word)
+        if not word.isalnum():
+            non_alphanumeric_count += 1
+
+    # Calculate the proportion of non-alphanumeric "words"
+    gibberish_proportion = non_alphanumeric_count / len(words)
+    return gibberish_proportion > gibberish_threshold
+
+# --- Student Information Input ---
 
 with st.form("student_profile"):
     st.subheader("Tell us about yourself:")
-    name = st.text_input("Your Name (Optional):", key="name")  # Added key
+    name = st.text_input("Your Name (Optional):", key="name")
     q1 = st.text_area("1. What subjects do you like?", key="q1")
     q2 = st.text_area("2. Which environment do you prefer working in (e.g., WFH, customer service, outdoors, office)?", key="q2")
     q3 = st.text_area("3. What activities do you enjoy the most (hobbies)?", key="q3")
@@ -56,40 +91,97 @@ for message in st.session_state.messages:
 # --- Initial Prompt (After Form Submission) ---
 
 if submitted:
-    if not all([q1, q2, q3, q4, q5, q6, q7]):  # More concise emptiness check
-        st.warning("Please answer all the questions to get the best recommendations.")
+    # Input Validation
+    inputs = [q1, q2, q3, q4, q5, q6, q7]
+    if not all(inputs):
+        st.warning("Please answer all the questions.")
     else:
-        initial_prompt = (
-            f"Student Profile:\n"
-            f"Name: {name if name else 'A student'}\n\n"  # Optional name
-            f"1. Liked Subjects: {q1}\n"
-            f"2. Preferred Work Environment: {q2}\n"
-            f"3. Hobbies: {q3}\n"
-            f"4. Personality (Others' and Self-Perception): {q4}\n"
-            f"5. Natural Talents: {q5}\n"
-            f"6. Teamwork Preference: {q6}\n"
-            f"7. Adaptability to Learning: {q7}\n\n"
-            "Based on this comprehensive profile, suggest suitable majors and career paths. "
-            "Provide detailed explanations, including:\n"
-            "* **Specific Major Recommendations:** (e.g., Computer Science, Psychology, Environmental Engineering)\n"
-            "* **Why These Majors Fit:** Connect the student's answers to the major requirements and career outcomes.\n"
-            "* **Potential Career Paths:** List specific job titles or career areas for each major (e.g., Software Engineer, Clinical Psychologist, Environmental Consultant).\n"
-            "* **Pros and Cons:** Briefly discuss the advantages and disadvantages of each path.\n"
-            "* **Further Exploration:** Suggest resources like professional organizations, websites, or books for the student to learn more.\n"
-            "* **University/College Suggestions (Optional):** If possible, mention universities known for strong programs in the suggested majors."
+        gibberish_detected = False
+        for i, input_text in enumerate(inputs):
+            if is_gibberish(input_text):
+                st.error(f"Your answer to question {i+1} seems unclear.  Please provide a more detailed and meaningful response.")
+                gibberish_detected = True
+                break  # Stop checking after the first gibberish input
 
-        )
+        if not gibberish_detected:
+            initial_prompt = (
+                f"Student Profile:\n"
+                f"Name: {name if name else 'A student'}\n\n"
+                f"1. Liked Subjects: {q1}\n"
+                f"2. Preferred Work Environment: {q2}\n"
+                f"3. Hobbies: {q3}\n"
+                f"4. Personality (Others' and Self-Perception): {q4}\n"
+                f"5. Natural Talents: {q5}\n"
+                f"6. Teamwork Preference: {q6}\n"
+                f"7. Adaptability to Learning: {q7}\n\n"
+                "Based on this comprehensive profile, suggest suitable majors and career paths. "
+                "Provide detailed explanations, including:\n"
+                "* **Specific Major Recommendations:** (e.g., Computer Science, Psychology, Environmental Engineering)\n"
+                "* **Why These Majors Fit:** Connect the student's answers to the major requirements and career outcomes.\n"
+                "* **Potential Career Paths:** List specific job titles or career areas for each major (e.g., Software Engineer, Clinical Psychologist, Environmental Consultant).\n"
+                "* **Pros and Cons:** Briefly discuss the advantages and disadvantages of each path.\n"
+                "* **Further Exploration:** Suggest resources like professional organizations, websites, or books for the student to learn more.\n"
+                "* **University/College Suggestions (Optional):** If possible, mention universities known for strong programs in the suggested majors."
 
-        st.session_state.messages.append({"role": "user", "content": initial_prompt})
+            )
+
+            st.session_state.messages.append({"role": "user", "content": initial_prompt})
+            with st.chat_message("user"):
+                st.markdown(initial_prompt)
+
+            # --- Gemini API Call (Initial Response) ---
+            try:
+                model = genai.GenerativeModel('gemini-1.5-pro-002')
+                chat = model.start_chat(history=[])
+
+                response = chat.send_message(initial_prompt, stream=True)
+
+                with st.chat_message("assistant"):
+                    full_response = ""
+                    placeholder = st.empty()
+                    for chunk in response:
+                        full_response += chunk.text
+                        placeholder.markdown(full_response + "▌")
+                    placeholder.markdown(full_response)
+
+                st.session_state.messages.append({"role": "assistant", "content": full_response})
+
+            except Exception as e:
+                st.error(f"An error occurred: {e}")
+
+# --- Subsequent Chat Input (for follow-up questions) ---
+
+if prompt := st.chat_input("Ask a follow-up question..."):
+    # Input Validation for follow-up question
+    if is_gibberish(prompt):
+        st.error("Please enter a clear and meaningful question.")
+    else:
+        st.session_state.messages.append({"role": "user", "content": prompt})
         with st.chat_message("user"):
-            st.markdown(initial_prompt)
+            st.markdown(prompt)
 
-        # --- Gemini API Call (Initial Response) ---
+        # --- Gemini API Call (Follow-up Response) ---
+
         try:
-            model = genai.GenerativeModel('gemini-1.5-pro-002')
-            chat = model.start_chat(history=[])
+            initial_user_message = None
+            initial_assistant_message = None
+            for i in range(len(st.session_state.messages) -1):
+                 if st.session_state.messages[i]['role'] == 'user' and st.session_state.messages[i+1]['role'] == 'assistant':
+                    initial_user_message = st.session_state.messages[i]
+                    initial_assistant_message = st.session_state.messages[i+1]
+                    break
 
-            response = chat.send_message(initial_prompt, stream=True)
+            history = []
+            if initial_user_message and initial_assistant_message:
+                history.append({"role": initial_user_message["role"], "parts": [initial_user_message["content"]]})
+                history.append({"role": initial_assistant_message["role"], "parts": [initial_assistant_message["content"]]})
+            for i in range (len(st.session_state.messages) -1):
+                if st.session_state.messages[i]['role'] != 'model':
+                    history.append({"role":st.session_state.messages[i]['role'], "parts":[st.session_state.messages[i]['content']]})
+
+            model = genai.GenerativeModel('gemini-1.5-pro-002')
+            chat = model.start_chat(history=history)
+            response = chat.send_message(prompt, stream=True)
 
             with st.chat_message("assistant"):
                 full_response = ""
@@ -103,46 +195,3 @@ if submitted:
 
         except Exception as e:
             st.error(f"An error occurred: {e}")
-
-# --- Subsequent Chat Input (for follow-up questions) ---
-if prompt := st.chat_input("Ask a follow-up question..."):
-    st.session_state.messages.append({"role": "user", "content": prompt})
-    with st.chat_message("user"):
-        st.markdown(prompt)
-
-    # --- Gemini API Call (Follow-up Response) ---
-    try:
-        initial_user_message = None
-        initial_assistant_message = None
-        for i in range(len(st.session_state.messages) - 1):
-            if st.session_state.messages[i]['role'] == 'user' and st.session_state.messages[i+1]['role'] == 'assistant':
-                initial_user_message = st.session_state.messages[i]
-                initial_assistant_message = st.session_state.messages[i+1]
-                break
-
-        history = []
-        if initial_user_message and initial_assistant_message:
-            history.append({"role": initial_user_message["role"], "parts": [initial_user_message["content"]]})
-            history.append({"role": initial_assistant_message["role"], "parts": [initial_assistant_message["content"]]})
-
-        for i in range (len(st.session_state.messages) -1):
-            if st.session_state.messages[i]['role'] != 'model':
-                history.append({"role":st.session_state.messages[i]['role'], "parts":[st.session_state.messages[i]['content']]})
-
-
-        model = genai.GenerativeModel('gemini-1.5-pro-002')  # Consistent model
-        chat = model.start_chat(history=history)
-        response = chat.send_message(prompt, stream=True)
-
-        with st.chat_message("assistant"):
-            full_response = ""
-            placeholder = st.empty()
-            for chunk in response:
-                full_response += chunk.text
-                placeholder.markdown(full_response + "▌")
-            placeholder.markdown(full_response)
-
-        st.session_state.messages.append({"role": "assistant", "content": full_response})
-
-    except Exception as e:
-        st.error(f"An error occurred: {e}")
