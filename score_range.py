@@ -1,8 +1,16 @@
 import pandas as pd
 
 # Load the Excel file containing min/max TCAS scores
-file_path = r"Untitled_spreadsheet.xlsx"  
-df = pd.read_excel(file_path, engine="openpyxl")  
+file_path = r"Untitled_spreadsheet.xlsx"  # Make sure this path is correct!
+try:
+    df = pd.read_excel(file_path, engine="openpyxl")  
+except FileNotFoundError:
+    print(f"Error: File not found at path: {file_path}")
+    exit()
+except Exception as e:
+    print(f"Error loading Excel file: {e}")
+    exit()
+
 
 # Ensure required columns exist
 required_columns = ["University", "Faculty", "Submajor", "คะแนนต่ำสุด หลังประมวลผลรอบ 2", "คะแนนสูงสุด หลังประมวลผลรอบ 2"]
