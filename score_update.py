@@ -1,4 +1,3 @@
-import streamlit as st
 import chulaweight  # Import Chula weight data
 import kmitlweight
 import tuweight2
@@ -17,18 +16,18 @@ for faculty_dict3 in tuweight2.tuweight:
     tu_data.update(faculty_dict3)
 
 class FacultyScoreCalculator:
-    faculty_criteria = {"CHULA": chula_data,"KMITL": kmitl_data, "TU": tu_data}
+    faculty_criteria = {"chula": chula_data,"kmitl": kmitl_data, "TU":tu_data}  
 
     def __init__(self, university, faculty, sub_major=None):
         self.university = university
         self.faculty = faculty
         self.sub_major = sub_major
-
+        
         if sub_major:
             self.criteria = self.faculty_criteria.get(university, {}).get(faculty, {}).get(sub_major, {})
         else:
             self.criteria = self.faculty_criteria.get(university, {}).get(faculty, {})
-
+        
         self.scores = {}
 
     def get_valid_score(self, subject):
@@ -135,3 +134,9 @@ def main():
     else:
         print("\nUnable to calculate score due to invalid data.")
         return None, None, None, None
+
+if __name__ == "__main__":
+    university, faculty, sub_major, score = main()
+    if university and faculty and sub_major and score is not None:
+        import score_range  
+        score_range.check_score(university, faculty, sub_major, score)

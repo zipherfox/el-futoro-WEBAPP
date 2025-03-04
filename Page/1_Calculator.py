@@ -1,7 +1,8 @@
 import streamlit as st
-from score import FacultyScoreCalculator, chula_data, kmitl_data
+from score import FacultyScoreCalculator, chula_data, kmitl_data, tu_data
 import score_range
 import streamlit.components.v1 as components
+import json  # Import the json module
 
 # --- Helper Functions ---
 
@@ -30,10 +31,12 @@ with st.sidebar:
     faculty = st.selectbox("Select Faculty", calculator.available_faculties(), index=0)
 
     sub_major = None
-    if university == "chula" and faculty in chula_data and isinstance(chula_data[faculty], dict):
+    if university == "CHULA" and faculty in chula_data and isinstance(chula_data[faculty], dict):
         sub_major = st.selectbox("Select Sub-Major", list(chula_data[faculty].keys()))
-    elif university == "kmitl" and faculty in kmitl_data and isinstance(kmitl_data[faculty], dict):
+    elif university == "KMITL" and faculty in kmitl_data and isinstance(kmitl_data[faculty], dict):
         sub_major = st.selectbox("Select Sub-Major", list(kmitl_data[faculty].keys()))
+    elif university == "TU" and faculty in tu_data and isinstance(tu_data[faculty], dict):
+        sub_major = st.selectbox("Select Sub-Major", list(tu_data[faculty].keys()))
     calculator = FacultyScoreCalculator(university, faculty, sub_major)
 
 # --- GPAX Input (Dynamically Updated) ---
@@ -46,14 +49,14 @@ if gpax_required is not None:
                 f"Enter your GPAX (Minimum: {gpax_required}, Maximum: 4.0)",
                 min_value=0.0,
                 max_value=4.0,
-                step=0.01,
+                step=0.25,
                 format="%.2f",
-                key="gpax_input",   
+                key="gpax_input",
             )
 
-        # Check if GPAX has been entered *and* is below the minimum.
         if gpax is not None and gpax < gpax_required:
             st.error(f"Your GPAX must be at least {gpax_required}.")
+            st.stop()
         elif gpax is not None and gpax > 4.0:
             st.error("GPAX cannot exceed 4.0.")
         elif gpax is not None:
@@ -68,7 +71,7 @@ with score_inputs_container:
     for subject, weight in calculator.criteria.items():
         if subject != "GPAX":
             with score_cols[col_index]:
-                step_value = 1.0
+                step_value = 2.5
                 if subject in ("TGAT1", "TGAT2", "TGAT3", "TPAT1", "TPAT2", "TPAT3", "TPAT4", "TPAT5"):
                     step_value = 5.0
                 elif subject.startswith("A-Level"):
@@ -91,6 +94,15 @@ with calculate_button_col:
     if st.button("Calculate Score", type="primary", use_container_width=True):
         result = calculator.calculate_score()
 
+        log_data = {
+            "university": university,
+            "faculty": faculty,
+            "sub_major": sub_major,
+            "scores": calculator.scores,
+            "calculated_score": result,
+            "score_check_status": None
+        }
+
         if result is not None:
             with result_col:
                 st.metric(
@@ -98,6 +110,7 @@ with calculate_button_col:
                     value=f"{result:.2f}",
                 )
             status = score_range.check_score(university, faculty, sub_major, result)
+            log_data["score_check_status"] = status
             message, message_type = get_score_status_message(status)
             with result_col:
                 if message_type == "success":
@@ -106,15 +119,17 @@ with calculate_button_col:
                     st.error(message)
                 else:
                     st.warning(message)
-
-            # --- Inject JavaScript for console.log ---
-            js_code = f"""
-            <script>
-            console.log("Calculated Score: {result}");
-            console.log("Score Check Status: {status}");
-            </script>
-            """
-            components.html(js_code, height=0)
         else:
+            log_data["error"] = "Unable to calculate score due to invalid data."
             with result_col:
                 st.error("Unable to calculate score due to invalid data.")
+
+
+        # --- Inject JavaScript for console.log (using console.table) ---
+        js_code = f"""
+        <script>
+        console.log("Calculation Data:");
+        console.table({json.dumps(log_data)});  // Convert log_data to JSON and use console.table
+        </script>
+        """
+        components.html(js_code, height=0)
