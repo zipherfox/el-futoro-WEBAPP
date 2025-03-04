@@ -2,8 +2,7 @@ import streamlit as st
 # --- Footer (static, outside of navigation) ---
 def show_footer():
     st.markdown("---")
-    st.write("Created with ❤️ by [Your Name/Team]")
-
+    st.write("Created with 🖤 by Zipherfox and friends")
 
 # --- Main App Structure ---
 st.set_page_config(layout="wide")  # Set layout for the entire app
@@ -16,4 +15,4 @@ with main_container:
         st.Page("Page/2_AI.py")
         ])
     nav.run()
-show_footer()
+show_footer()  # Display the footer outside of the navigation
